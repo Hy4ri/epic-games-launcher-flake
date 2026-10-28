@@ -1,6 +1,7 @@
 {
   lib,
   buildFHSEnv,
+  patchelf,
   writeShellScript,
   epic-games-launcher-unwrapped,
   extraPkgs ? _pkgs: [ ],
@@ -196,6 +197,46 @@ buildFHSEnv {
 
   extraBuildCommands = ''
     cp -f "$out/usr/"{bin,sbin}/ldconfig || true
+
+    # GE-Proton prepends its own files/lib/{x86_64,i386}-linux-gnu to LD_LIBRARY_PATH,
+    # which ships an older libxkbcommon.so.0 (0.9.2, missing V_1.10.0) that breaks
+    # Nixpkgs' libSDL3.so.0 when winebus.so dlopens libSDL2-2.0.so.0 -> libSDL3.so.0.
+    # Converting libSDL2 and libSDL3 from DT_RUNPATH to DT_RPATH ensures they resolve
+    # their own Nix store dependencies before GE-Proton's LD_LIBRARY_PATH.
+    for libdir in "$out/usr/lib64" "$out/usr/lib32"; do
+      if [ -d "$libdir" ]; then
+        sdl3_real=""
+        for f in "$libdir"/libSDL3.so.0.*; do
+          if [ -L "$f" ]; then
+            sdl3_real="$(readlink -f "$f")"
+            rm -f "$f"
+            cp "$sdl3_real" "$f"
+            chmod u+w "$f"
+            rpath="$(${patchelf}/bin/patchelf --print-rpath "$f")"
+            if [ -n "$rpath" ]; then
+              ${patchelf}/bin/patchelf --force-rpath --set-rpath "$rpath" "$f"
+            fi
+            ln -sf "$(basename "$f")" "$libdir/libSDL3.so.0"
+            ln -sf "$(basename "$f")" "$libdir/libSDL3.so"
+          fi
+        done
+        for f in "$libdir"/libSDL2-2.0.so.0.*; do
+          if [ -L "$f" ]; then
+            sdl2_real="$(readlink -f "$f")"
+            rm -f "$f"
+            cp "$sdl2_real" "$f"
+            chmod u+w "$f"
+            rpath="$(${patchelf}/bin/patchelf --print-rpath "$f")"
+            if [ -n "$rpath" ]; then
+              ${patchelf}/bin/patchelf --force-rpath --set-rpath "$libdir:/usr/$(basename "$libdir"):$rpath" "$f"
+            fi
+            ln -sf "$(basename "$f")" "$libdir/libSDL2-2.0.so.0"
+            ln -sf "$(basename "$f")" "$libdir/libSDL2-2.0.so"
+            ln -sf "$(basename "$f")" "$libdir/libSDL2.so"
+          fi
+        done
+      fi
+    done
   '';
 
   extraBwrapArgs = [
