@@ -145,7 +145,7 @@ stdenv.mkDerivation {
 
   src = fetchurl {
     url = "https://content-download-egs.distro.on.epicgames.com/Builds/EGLv2/${encodedVersion}/Linux/EpicGamesLauncher-x86_64.deb";
-    hash = "sha256-YYrcC8x3i7sfSXOBENXCGehh7Uy3rbcrJPtVAxVqbWM=";
+    hash = "sha256-t/Dg7U9Rb9b170OlTF3a+6CCw6PVsY7cQN6IY8povDQ=";
   };
 
   nativeBuildInputs = [
